@@ -1,15 +1,13 @@
-// Importing mongoose (MongoDB ODP), dotenv for .env
+/*
+ * Changes made / issues previously found:
+ * - Was an un-awaited IIFE, so part1.js had no way to know when the connection was ready
+ * - global.db was set but never used (models use the mongoose connection directly)
+ * - Now exports the connection promise so part1.js can await it
+ */
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connecting to database using IIFE
-(async () => {
-    try {
-        const { connection } = await mongoose.connect(process.env.MONGO_AUTH);
-        global.db = connection.db;
-        console.log('Connected to MongoDB');
-    } catch(e) {
-        console.error(e);
-        process.exit(1);
-    }
-})();
+// changed: export the connection promise instead of running an un-awaited IIFE
+module.exports = mongoose.connect(process.env.MONGO_AUTH).then(() => {
+    console.log('Connected to MongoDB');
+});

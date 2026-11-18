@@ -1,102 +1,54 @@
-const Movie  = require('../models/movie');
-const Review = require('../models/review');
+const mongoose = require('mongoose');
+const connect = require('./start');
+const Movie = require('./collections/movies');
+const Review = require('./collections/reviews');
 
-// Inserting into movies collection (داتا ثابتة)
-const insertIntoMovies = async () => {
-    const fightClub = new Movie({
-        title: 'Fight Club',
-        genre: 'Drama',
-        releaseYear: 1999,
-        imdbRating: 8.8
-    });
-    await fightClub.save();
+async function main() {
+    await connect;
 
-    const interstellar = new Movie({
-        title: 'Interstellar',
-        genre: 'Sci-Fi',
-        releaseYear: 2014,
-        imdbRating: 8.7
-    });
-    await interstellar.save();
+    // بنفضي الداتا كل مرة نشغل الفايل
+    await Movie.deleteMany({});
+    await Review.deleteMany({});
 
-    const vanillaSky = new Movie({
-        title: 'Vanilla Sky',
-        genre: 'Sci-Fi',
-        releaseYear: 2001,
-        imdbRating: 6.9
-    });
-    await vanillaSky.save();
-};
+    // 1. Two collections, at least three documents in each.
+    await Movie.insertMany([
+        { _id: 1, title: 'Fight Club', genre: 'Drama', releaseYear: 1999, imdbRating: 8.8 },
+        { _id: 2, title: 'Interstellar', genre: 'Sci-Fi', releaseYear: 2014, imdbRating: 8.7 },
+        { _id: 3, title: 'Vanilla Sky', genre: 'Sci-Fi', releaseYear: 2001, imdbRating: 6.9 }
+    ]);
 
-// Inserting into reviews collection (داتا ثابتة)
-const insertIntoReviews = async () => {
-    const fightClubReview = new Review({
-        movieId: (await Movie.findOne({ title: 'Fight Club' }))._id,
-        comment: 'film fager',
-        rating: 9
-    });
-    await fightClubReview.save();
+    await Review.insertMany([
+        { _id: 1, movieId: 1, comment: 'Gamed gmoda', rating: 10 },
+        { _id: 2, movieId: 1, comment: 'Fager', rating: 9 },
+        { _id: 3, movieId: 2, comment: 'Msh momken', rating: 8 }
+    ]);
+    console.log('Created 3 movies and 3 reviews (reviews 1 & 2 belong to movie 1).');
 
-    const interstellarReview = new Review({
-        movieId: (await Movie.findOne({ title: 'Interstellar' }))._id,
-        comment: 'y5rbet elgmdan',
-        rating: 10
-    });
-    await interstellarReview.save();
+    // 2. Delete at least one document from each collection.
+    await Movie.deleteOne({ _id: 3 });
+    await Review.deleteOne({ _id: 3 });
 
-    const vanillaSkyReview = new Review({
-        movieId: (await Movie.findOne({ title: 'Vanilla Sky' }))._id,
-        comment: 'unexpected plot twist mn romance to sci-fi',
-        rating: 8
-    });
-    await vanillaSkyReview.save();
-};
+    // 3. Add the 'Score' array to at least two documents in each collection.
+    await Movie.updateMany({}, { $set: { Score: [1, 2, 3, 4] } });
+    await Review.updateMany({}, { $set: { Score: [1, 2, 3, 4] } });
 
-// IIFE, ننفذ
-(async () => {
-    // Create two collections and create at least three documents in each one.
-    await insertIntoMovies();
-    await insertIntoReviews();
-
-    // Delete at least one document from each collection
-    await Movie.deleteOne({ title: 'Vanilla Sky' });
-    console.log("Vanilla Sky movie deleted.");
-    await Review.deleteOne({ comment: 'unexpected plot twist mn romance to sci-fi' });
-    console.log("Review for Vanilla Sky deleted.");
-
-    // Update at least two documents [add an array called ‘Score’] in each collection.
-    // دول ارقام عشوائية
-    await Movie.updateMany({}, {
-        $set: { score: [9, 7, 8, 4, 2] }
-    });
-    await Review.updateMany({}, {
-        $set: { score: [4, 9, 7, 2, 8] }
-    });
-    console.log("Scores updated for movies and reviews.");
-
-    // If the ‘_id’ of the document =1 update the array called ‘Score’ and
-    // put number 5 in the third position of the array if not put number 6 in the fourth position.
-    // مش عارف استعمل انهي كولكشن فهستعمل الافلام
-    // السؤال مش واضح اوي بس عملت اللي فهمته
-    const movieId1 = await Movie.findById('1');
-    if(movieId1) {
-        await Movie.findOneAndUpdate({ _id: '1' }, { $set: { score: [9, 7, 5, 4, 2] } });
-        console.log("Score updated for movie with _id = 1.");
-    } else {
-        await Movie.findOneAndUpdate({ _id: { $ne: '1' } }, { $set: { score: [9, 7, 8, 6, 2] } });
-        console.log("Score updated for movie with _id != 1.");
+    // 4. _id = 1 -> 5 in the third position (index 2); otherwise 6 in the fourth (index 3).
+    for (const Model of [Movie, Review]) {
+        await Model.updateMany({ _id: 1 }, { $set: { 'Score.2': 5 } });
+        await Model.updateMany({ _id: { $ne: 1 } }, { $set: { 'Score.3': 6 } });
     }
 
-    // Multiply each element in the array called ‘Score’ by 20.
-    const allMovies  = await Movie.find({});
-    for(let movie of allMovies) {
-        movie.score.map(score => score * 20);
-        await movie.save();
-    }
-    const allReviews = await Review.find({});
-    for(let review of allReviews) {
-        review.score.map(score => score * 20);
-        await review.save();
-    }
-    console.log("Scores multiplied by 20 for movies and reviews.");
-})();
+    // 5. Multiply every Score element by 20.
+    const multiplyBy20 = [{
+        $set: { Score: { $map: { input: '$Score', in: { $multiply: ['$$this', 20] } } } }
+    }];
+    await Movie.updateMany({}, multiplyBy20);
+    await Review.updateMany({}, multiplyBy20);
+
+    console.log('Movies:', JSON.stringify(await Movie.find(), null, 2));
+    console.log('Reviews:', JSON.stringify(await Review.find(), null, 2));
+}
+
+main()
+    .catch((err) => { console.error(err); process.exitCode = 1; })
+    .finally(() => mongoose.connection.close());
